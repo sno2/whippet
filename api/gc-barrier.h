@@ -33,7 +33,7 @@ static inline int gc_object_is_old_generation(struct gc_mutator *mut,
     uintptr_t base = addr & ~(alignment - 1);
     size_t granule_size = gc_allocator_small_granule_size();
     uintptr_t granule = (addr & (alignment - 1)) / granule_size;
-    uint8_t *byte_loc = (uint8_t*)(base + granule);
+    _Atomic uint8_t *byte_loc = (_Atomic uint8_t*)(base + granule);
     uint8_t byte = atomic_load_explicit(byte_loc, memory_order_relaxed);
     uint8_t mask = gc_old_generation_check_alloc_table_tag_mask();
     uint8_t young = gc_old_generation_check_alloc_table_young_tag();
@@ -77,7 +77,7 @@ static inline int gc_write_barrier_fast(struct gc_mutator *mut, struct gc_ref ob
     uintptr_t field = (addr & (field_table_alignment - 1)) / sizeof(uintptr_t);
     uintptr_t log_byte = field / fields_per_byte;
     uint8_t log_bit = first_bit_pattern << (field % fields_per_byte);
-    uint8_t *byte_loc = (uint8_t*)(base + table_offset + log_byte);
+    _Atomic uint8_t *byte_loc = (_Atomic uint8_t*)(base + table_offset + log_byte);
     uint8_t byte = atomic_load_explicit(byte_loc, memory_order_relaxed);
     return !(byte & log_bit);
   }

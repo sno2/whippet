@@ -32,7 +32,7 @@ BUILD_CPPFLAGS_opt      = -DNDEBUG
 BUILD_CPPFLAGS_optdebug = -DGC_DEBUG=1
 BUILD_CPPFLAGS_debug    = -DGC_DEBUG=1
 
-BUILD_CFLAGS = $(BUILD_CFLAGS_$(or $(BUILD),$(DEFAULT_BUILD)))
+BUILD_CFLAGS = -std=gnu23 $(BUILD_CFLAGS_$(or $(BUILD),$(DEFAULT_BUILD)))
 BUILD_CPPFLAGS = $(BUILD_CPPFLAGS_$(or $(BUILD),$(DEFAULT_BUILD)))
 
 USE_LTTNG_0 :=
@@ -43,7 +43,7 @@ LTTNG_LIBS := $(if $(USE_LTTNG_$(USE_LTTNG)), $(shell pkg-config --libs lttng-us
 TRACEPOINT_CPPFLAGS = $(if $(USE_LTTNG_$(USE_LTTNG)),$(LTTNG_CPPFLAGS) -DGC_TRACEPOINT_LTTNG=1,)
 TRACEPOINT_LIBS = $(LTTNG_LIBS)
 
-CC       = gcc
+CC       = clang
 CFLAGS   = -Wall -flto -fno-strict-aliasing -fvisibility=hidden -Wno-unused $(BUILD_CFLAGS)
 CPPFLAGS = -Iapi $(TRACEPOINT_CPPFLAGS) $(BUILD_CPPFLAGS)
 LDFLAGS  = -lpthread -flto=auto $(TRACEPOINT_LIBS)

@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 struct gc_header {
-  uintptr_t tag;
+  _Atomic uintptr_t tag;
 };
 
 // Alloc kind is in bits 1-7, for live objects.
@@ -21,7 +21,7 @@ static inline uintptr_t tag_live(uint8_t alloc_kind) {
     | gcobj_not_forwarded_bit;
 }
 
-static inline uintptr_t* tag_word(struct gc_ref ref) {
+static inline _Atomic uintptr_t* tag_word(struct gc_ref ref) {
   struct gc_header *header = gc_ref_heap_object(ref);
   return &header->tag;
 }

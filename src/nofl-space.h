@@ -61,7 +61,7 @@ struct nofl_slab;
 struct nofl_slab_header {
   union {
     struct {
-      uint8_t block_marks[NOFL_BLOCKS_PER_SLAB];
+      _Atomic uint8_t block_marks[NOFL_BLOCKS_PER_SLAB];
     };
     uint8_t padding[NOFL_HEADER_BYTES_PER_SLAB];
   };
@@ -140,8 +140,8 @@ STATIC_ASSERT_EQ(sizeof(struct nofl_slab), NOFL_SLAB_SIZE);
 // from it or only has threads adding items to it -- i.e., adding and
 // removing items don't happen concurrently.
 struct nofl_block_list {
-  size_t count;
-  uintptr_t blocks;
+  _Atomic size_t count;
+  _Atomic uintptr_t blocks;
 };
 
 // A block list that has concurrent threads adding and removing items
@@ -158,7 +158,7 @@ struct nofl_space {
   uint8_t evacuating;
   struct extents *extents;
   uint8_t last_collection_was_minor;
-  uint8_t heap_has_ambiguous_edges;
+  _Atomic uint8_t heap_has_ambiguous_edges;
   struct nofl_block_stack empty;
   struct nofl_block_stack paged_out[NOFL_PAGE_OUT_QUEUE_SIZE];
   struct nofl_block_list to_sweep;
@@ -172,14 +172,14 @@ struct nofl_space {
   double evacuation_minimum_reserve;
   double evacuation_reserve;
   double promotion_threshold;
-  ssize_t pending_unavailable_bytes; // atomically
+  _Atomic ssize_t pending_unavailable_bytes; // atomically
   struct nofl_slab **slabs;
   size_t nslabs;
-  uintptr_t old_generation_granules; // atomically
-  uintptr_t survivor_granules_at_last_collection; // atomically
-  uintptr_t allocated_granules_since_last_collection; // atomically
-  uintptr_t fragmentation_granules_since_last_collection; // atomically
-  uintptr_t second_chance_granules_since_last_collection; // atomically
+  _Atomic uintptr_t old_generation_granules; // atomically
+  _Atomic uintptr_t survivor_granules_at_last_collection; // atomically
+  _Atomic uintptr_t allocated_granules_since_last_collection; // atomically
+  _Atomic uintptr_t fragmentation_granules_since_last_collection; // atomically
+  _Atomic uintptr_t second_chance_granules_since_last_collection; // atomically
 };
 
 struct nofl_allocator {
@@ -298,21 +298,21 @@ nofl_object_slab(void *obj) {
   return (struct nofl_slab*) base;
 }
 
-static uint8_t*
+static _Atomic uint8_t*
 nofl_metadata_byte_for_addr(uintptr_t addr) {
   uintptr_t base = align_down(addr, NOFL_SLAB_SIZE);
   uintptr_t granule = (addr & (NOFL_SLAB_SIZE - 1)) >> NOFL_GRANULE_SIZE_LOG_2;
-  return (uint8_t*) (base + granule);
+  return (_Atomic uint8_t*) (base + granule);
 }
 
-static uint8_t*
+static _Atomic uint8_t*
 nofl_metadata_byte_for_object(struct gc_ref ref) {
-  uint8_t *ret = nofl_metadata_byte_for_addr(gc_ref_value(ref));
+  _Atomic uint8_t *ret = nofl_metadata_byte_for_addr(gc_ref_value(ref));
   GC_ASSERT(*ret & NOFL_METADATA_BYTE_MARK_MASK);
   return ret;
 }
 
-static uint8_t*
+static _Atomic uint8_t*
 nofl_block_mark_loc(uintptr_t addr) {
   uintptr_t base = align_down(addr, NOFL_SLAB_SIZE);
   struct nofl_slab *slab = (struct nofl_slab *) base;
@@ -327,7 +327,7 @@ nofl_block_is_marked(uintptr_t addr) {
 
 static void
 nofl_block_set_mark(uintptr_t addr) {
-  uint8_t *loc = nofl_block_mark_loc(addr);
+  _Atomic uint8_t *loc = nofl_block_mark_loc(addr);
   if (!atomic_load_explicit(loc, memory_order_relaxed))
     atomic_store_explicit(loc, 1, memory_order_relaxed);
 }
@@ -606,7 +606,7 @@ nofl_clear_memory(uintptr_t addr, size_t size) {
 }
 
 static size_t
-nofl_space_live_object_granules(uint8_t *metadata) {
+nofl_space_live_object_granules(_Atomic uint8_t *metadata) {
   return scan_for_byte_with_bits(metadata, -1, NOFL_METADATA_BYTE_END) + 1;
 }
 
@@ -782,7 +782,7 @@ nofl_allocator_next_hole_in_block(struct nofl_allocator *alloc,
     return 0;
 
   GC_ASSERT((sweep & (NOFL_GRANULE_SIZE - 1)) == 0);
-  uint8_t* metadata = nofl_metadata_byte_for_addr(sweep);
+  _Atomic uint8_t* metadata = nofl_metadata_byte_for_addr(sweep);
   size_t limit_granules = (limit - sweep) >> NOFL_GRANULE_SIZE_LOG_2;
 
   // Except for when we first get a block, alloc->sweep is positioned
@@ -1046,7 +1046,7 @@ nofl_space_heap_has_ambiguous_edges(struct nofl_space *space) {
 
 static void
 nofl_clear_pinned_bits_in_block(struct nofl_block_ref block) {
-  uint8_t *meta = nofl_metadata_byte_for_addr(block.addr);
+  _Atomic uint8_t *meta = nofl_metadata_byte_for_addr(block.addr);
   uint64_t mask = broadcast_byte (NOFL_METADATA_BYTE_PINNED);
   for (size_t i = 0; i < NOFL_GRANULES_PER_BLOCK; i += 8, meta += 8) {
     uint64_t vals = load_eight_aligned_bytes(meta);
@@ -1136,12 +1136,12 @@ nofl_space_contains_edge(struct nofl_space *space, struct gc_edge edge) {
 
 static inline int
 nofl_space_is_survivor(struct nofl_space *space, struct gc_ref ref) {
-  uint8_t *metadata = nofl_metadata_byte_for_object(ref);
+  _Atomic uint8_t *metadata = nofl_metadata_byte_for_object(ref);
   uint8_t byte = atomic_load_explicit(metadata, memory_order_relaxed);
   return nofl_metadata_byte_has_mark(byte, space->survivor_mark);
 }
 
-static uint8_t*
+static _Atomic uint8_t*
 nofl_field_logged_byte(struct gc_edge edge) {
   return nofl_metadata_byte_for_addr(gc_edge_address(edge));
 }
@@ -1160,7 +1160,7 @@ nofl_space_remember_edge(struct nofl_space *space, struct gc_ref obj,
   if (!GC_GENERATIONAL) return 0;
   if (!nofl_space_is_survivor(space, obj))
     return 0;
-  uint8_t* loc = nofl_field_logged_byte(edge);
+  _Atomic uint8_t* loc = nofl_field_logged_byte(edge);
   uint8_t bit = nofl_field_logged_bit(edge);
   uint8_t byte = atomic_load_explicit(loc, memory_order_acquire);
   do {
@@ -1175,7 +1175,7 @@ static void
 nofl_space_forget_edge(struct nofl_space *space, struct gc_edge edge) {
   GC_ASSERT(nofl_space_contains_edge(space, edge));
   GC_ASSERT(GC_GENERATIONAL);
-  uint8_t* loc = nofl_field_logged_byte(edge);
+  _Atomic uint8_t* loc = nofl_field_logged_byte(edge);
   if (GC_DEBUG) {
     pthread_mutex_lock(&space->lock);
     uint8_t bit = nofl_field_logged_bit(edge);
@@ -1459,7 +1459,7 @@ nofl_metadata_byte_trace_kind(struct nofl_space *space, uint8_t byte)
 static void
 nofl_assert_not_forwarded(struct gc_ref ref)
 {
-  uint8_t *metadata = nofl_metadata_byte_for_object(ref);
+  _Atomic uint8_t *metadata = nofl_metadata_byte_for_object(ref);
   uint8_t byte = atomic_load_explicit(metadata, memory_order_relaxed);
   GC_ASSERT(!nofl_metadata_byte_has_mark(byte, NOFL_METADATA_BYTE_FORWARDED));
 }
@@ -1475,7 +1475,7 @@ nofl_space_verify_sweepable_blocks(struct nofl_space *space,
     // the measured object size.
     uintptr_t addr = b.addr;
     uintptr_t limit = addr + NOFL_BLOCK_SIZE;
-    uint8_t *meta = nofl_metadata_byte_for_addr(b.addr);
+    _Atomic uint8_t *meta = nofl_metadata_byte_for_addr(b.addr);
     while (addr < limit) {
       uint8_t byte = meta[0];
       if (nofl_metadata_byte_has_mark(byte, space->current_mark)) {
@@ -1526,7 +1526,7 @@ nofl_space_verify_swept_blocks(struct nofl_space *space,
     // the measured object size.
     uintptr_t addr = b.addr;
     uintptr_t limit = addr + NOFL_BLOCK_SIZE;
-    uint8_t *meta = nofl_metadata_byte_for_addr(addr);
+    _Atomic uint8_t *meta = nofl_metadata_byte_for_addr(addr);
     while (addr < limit) {
       uint8_t byte = meta[0];
       if (byte) {
@@ -1568,7 +1568,7 @@ nofl_space_verify_empty_blocks(struct nofl_space *space,
     // the measured object size.
     uintptr_t addr = b.addr;
     uintptr_t limit = addr + NOFL_BLOCK_SIZE;
-    uint8_t *meta = nofl_metadata_byte_for_addr(addr);
+    _Atomic uint8_t *meta = nofl_metadata_byte_for_addr(addr);
     while (addr < limit) {
       GC_ASSERT_EQ(*meta, 0);
       if (paged_in && nofl_block_has_flag(b, NOFL_BLOCK_ZERO)) {
@@ -1685,7 +1685,7 @@ nofl_space_should_evacuate(struct nofl_space *space, uint8_t metadata_byte,
 }
 
 static inline int
-nofl_space_set_mark(struct nofl_space *space, uint8_t *metadata,
+nofl_space_set_mark(struct nofl_space *space, _Atomic uint8_t *metadata,
                     uint8_t byte) {
   uint8_t mask = NOFL_METADATA_BYTE_MARK_MASK;
   byte = (byte & ~mask) | space->current_mark;
@@ -1694,7 +1694,7 @@ nofl_space_set_mark(struct nofl_space *space, uint8_t *metadata,
 }
 
 static inline int
-nofl_space_set_nonempty_mark(struct nofl_space *space, uint8_t *metadata,
+nofl_space_set_nonempty_mark(struct nofl_space *space, _Atomic uint8_t *metadata,
                              uint8_t byte, struct gc_ref ref) {
   // FIXME: Check that relaxed atomics are actually worth it.
   if (nofl_space_set_mark(space, metadata, byte)) {
@@ -1712,7 +1712,7 @@ nofl_space_pin_object(struct nofl_space *space, struct gc_ref ref) {
   // the pinned bit instead to indicate conservatively-traced objects.
   if (nofl_space_heap_has_ambiguous_edges (space))
     return;
-  uint8_t *metadata = nofl_metadata_byte_for_object(ref);
+  _Atomic uint8_t *metadata = nofl_metadata_byte_for_object(ref);
   uint8_t byte = atomic_load_explicit(metadata, memory_order_relaxed);
   if (byte & NOFL_METADATA_BYTE_PINNED)
     return;
@@ -1725,7 +1725,7 @@ nofl_space_pin_object(struct nofl_space *space, struct gc_ref ref) {
 }
 
 static inline uint8_t
-clear_logged_bits_in_evacuated_object(uint8_t head, uint8_t *metadata,
+clear_logged_bits_in_evacuated_object(uint8_t head, _Atomic uint8_t *metadata,
                                       size_t count) {
   // On a major collection, it could be that we evacuate an object that
   // has one or more fields in the old-to-new remembered set.  Because
@@ -1753,7 +1753,7 @@ clear_logged_bits_in_evacuated_object(uint8_t head, uint8_t *metadata,
 
 
 static inline int
-nofl_space_evacuate(struct nofl_space *space, uint8_t *metadata, uint8_t byte,
+nofl_space_evacuate(struct nofl_space *space, _Atomic uint8_t *metadata, uint8_t byte,
                     struct gc_edge edge,
                     struct gc_ref old_ref,
                     struct nofl_allocator *evacuate) {
@@ -1787,7 +1787,7 @@ nofl_space_evacuate(struct nofl_space *space, uint8_t *metadata, uint8_t byte,
 
       // Now update extent metadata, and indicate to the caller that
       // the object's fields need to be traced.
-      uint8_t *new_metadata = nofl_metadata_byte_for_addr(gc_ref_value(new_ref));
+      _Atomic uint8_t *new_metadata = nofl_metadata_byte_for_addr(gc_ref_value(new_ref));
       memcpy(new_metadata + 1, metadata + 1, object_granules - 1);
       byte = marked_byte;
       if (GC_GENERATIONAL)
@@ -1823,7 +1823,7 @@ nofl_space_evacuate_or_mark_object(struct nofl_space *space,
                                    struct gc_edge edge,
                                    struct gc_ref old_ref,
                                    struct nofl_allocator *evacuate) {
-  uint8_t *metadata = nofl_metadata_byte_for_object(old_ref);
+  _Atomic uint8_t *metadata = nofl_metadata_byte_for_object(old_ref);
   uint8_t byte = atomic_load_explicit(metadata, memory_order_acquire);
   if (nofl_metadata_byte_has_mark(byte, space->current_mark))
     return 0;
@@ -1838,7 +1838,7 @@ nofl_space_evacuate_or_mark_object(struct nofl_space *space,
 static inline int
 nofl_space_mark_object(struct nofl_space *space, struct gc_ref ref,
                        struct nofl_allocator *evacuate) {
-  uint8_t *metadata = nofl_metadata_byte_for_object(ref);
+  _Atomic uint8_t *metadata = nofl_metadata_byte_for_object(ref);
   uint8_t byte = atomic_load_explicit(metadata, memory_order_acquire);
   if (nofl_metadata_byte_has_mark(byte, space->current_mark))
     return 0;
@@ -1852,7 +1852,7 @@ static int
 nofl_space_forward_or_mark_if_traced(struct nofl_space *space,
                                      struct gc_edge edge,
                                      struct gc_ref ref) {
-  uint8_t *metadata = nofl_metadata_byte_for_object(ref);
+  _Atomic uint8_t *metadata = nofl_metadata_byte_for_object(ref);
   uint8_t byte = atomic_load_explicit(metadata, memory_order_acquire);
   uint8_t mark = byte & NOFL_METADATA_BYTE_MARK_MASK;
   uint8_t busy_byte = (byte - mark) | NOFL_METADATA_BYTE_BUSY;
@@ -1873,7 +1873,7 @@ nofl_space_forward_or_mark_if_traced(struct nofl_space *space,
 
 struct nofl_resolved_conservative_ref {
   uintptr_t addr;
-  uint8_t *metadata;
+  _Atomic uint8_t *metadata;
   uint8_t byte;
 };
 
@@ -1902,7 +1902,7 @@ nofl_space_resolve_conservative_ref_with_metadata(struct nofl_space *space,
   if (nofl_block_has_flag(nofl_block_for_addr(addr), NOFL_BLOCK_UNAVAILABLE))
     return not_an_object;
 
-  uint8_t *loc = nofl_metadata_byte_for_addr(addr);
+  _Atomic uint8_t *loc = nofl_metadata_byte_for_addr(addr);
   uint8_t byte = atomic_load_explicit(loc, memory_order_relaxed);
 
   // Not pointing to the start of an object?  Scan backwards if the ref
@@ -1912,7 +1912,7 @@ nofl_space_resolve_conservative_ref_with_metadata(struct nofl_space *space,
       return not_an_object;
 
     uintptr_t block_base = align_down(addr, NOFL_BLOCK_SIZE);
-    uint8_t *loc_base = nofl_metadata_byte_for_addr(block_base);
+    _Atomic uint8_t *loc_base = nofl_metadata_byte_for_addr(block_base);
     uint8_t mask = NOFL_METADATA_BYTE_MARK_MASK | NOFL_METADATA_BYTE_END;
     loc = scan_backwards_for_byte_with_bits(loc, loc_base, mask);
 
@@ -1925,7 +1925,7 @@ nofl_space_resolve_conservative_ref_with_metadata(struct nofl_space *space,
     if (byte & NOFL_METADATA_BYTE_END)
       return not_an_object;
     // Found object start, and object is unmarked; adjust addr.
-    addr = block_base + (loc - loc_base) * NOFL_GRANULE_SIZE;
+    addr = block_base + ((_Atomic uint8_t *)loc - loc_base) * NOFL_GRANULE_SIZE;
   }
 
   return (struct nofl_resolved_conservative_ref) {addr, loc, byte};
@@ -1970,14 +1970,14 @@ nofl_space_mark_conservative_ref(struct nofl_space *space,
 
 static inline size_t
 nofl_space_object_size(struct nofl_space *space, struct gc_ref ref) {
-  uint8_t *loc = nofl_metadata_byte_for_object(ref);
+  _Atomic uint8_t *loc = nofl_metadata_byte_for_object(ref);
   size_t granules = nofl_space_live_object_granules(loc);
   return granules * NOFL_GRANULE_SIZE;
 }
 
 static inline struct gc_trace_plan
 nofl_space_object_trace_plan(struct nofl_space *space, struct gc_ref ref) {
-  uint8_t *loc = nofl_metadata_byte_for_object(ref);
+  _Atomic uint8_t *loc = nofl_metadata_byte_for_object(ref);
   uint8_t byte = atomic_load_explicit(loc, memory_order_relaxed);
   enum gc_trace_kind kind = nofl_metadata_byte_trace_kind (space, byte);
   switch (kind) {

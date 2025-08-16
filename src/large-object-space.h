@@ -35,7 +35,7 @@ struct large_object {
 };
 struct large_object_node;
 struct large_object_live_data {
-  uint8_t mark;
+  _Atomic uint8_t mark;
   enum gc_trace_kind trace;
 };
 struct large_object_dead_data {
@@ -119,7 +119,7 @@ struct large_object_space {
   size_t page_size_log2;
   size_t total_pages;
   size_t free_pages;
-  size_t live_pages_at_last_collection;
+  _Atomic size_t live_pages_at_last_collection;
   size_t pages_freed_by_last_collection;
   int synchronous_release;
 };
@@ -213,7 +213,7 @@ large_object_space_object_trace_plan(struct large_object_space *space,
   }
 }
 
-static uint8_t*
+static _Atomic uint8_t*
 large_object_node_mark_loc(struct large_object_node *node) {
   GC_ASSERT(node->value.is_live);
   return &node->value.live.mark;
@@ -239,7 +239,7 @@ large_object_space_mark(struct large_object_space *space, struct gc_ref ref) {
     return 0;
   GC_ASSERT(node->value.is_live);
 
-  uint8_t *loc = large_object_node_mark_loc(node);
+  _Atomic uint8_t *loc = large_object_node_mark_loc(node);
   uint8_t mark = atomic_load_explicit(loc, memory_order_relaxed);
   do {
     if (mark == space->marked)

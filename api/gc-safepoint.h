@@ -4,7 +4,7 @@
 #include "gc-api.h"
 
 GC_API_ void gc_safepoint_slow(struct gc_mutator *mut) GC_NEVER_INLINE;
-GC_API_ int* gc_safepoint_flag_loc(struct gc_mutator *mut);
+GC_API_ _Atomic int* gc_safepoint_flag_loc(struct gc_mutator *mut);
 static inline void gc_safepoint(struct gc_mutator *mut) GC_ALWAYS_INLINE;
 
 GC_API_ int gc_safepoint_signal_number(void);

@@ -113,7 +113,7 @@ copy_space_object_region(struct gc_ref obj) {
 #define COPY_SPACE_PAGE_OUT_QUEUE_SIZE 4
 
 struct copy_space_block_list {
-  struct copy_space_block *head;
+  _Atomic (struct copy_space_block *)head;
 };
 
 struct copy_space_block_stack {
@@ -131,11 +131,11 @@ struct copy_space {
   struct copy_space_block_stack empty;
   struct copy_space_block_stack partly_full;
   struct copy_space_block_list full ALIGNED_TO_AVOID_FALSE_SHARING;
-  size_t allocated_bytes;
-  size_t fragmentation;
+  _Atomic size_t allocated_bytes;
+  _Atomic size_t fragmentation;
   struct copy_space_block_stack paged_out[COPY_SPACE_PAGE_OUT_QUEUE_SIZE]
     ALIGNED_TO_AVOID_FALSE_SHARING;
-  ssize_t bytes_to_page_out ALIGNED_TO_AVOID_FALSE_SHARING;
+  _Atomic ssize_t bytes_to_page_out ALIGNED_TO_AVOID_FALSE_SHARING;
   // The rest of these members are only changed rarely and with the heap
   // lock.
   uint8_t active_region ALIGNED_TO_AVOID_FALSE_SHARING;
@@ -350,14 +350,14 @@ copy_space_field_logging_blocks(struct copy_space *space) {
   return blocks;
 }
 
-static uint8_t*
+static _Atomic uint8_t*
 copy_space_field_logged_byte(struct gc_edge edge) {
   uintptr_t addr = gc_edge_address(edge);
   uintptr_t base = align_down(addr, COPY_SPACE_SLAB_SIZE);
   base += offsetof(struct copy_space_slab, blocks);
   uintptr_t field = (addr & (COPY_SPACE_SLAB_SIZE - 1)) / sizeof(uintptr_t);
   uintptr_t byte = field / 8;
-  return (uint8_t*) (base + byte);
+  return (_Atomic uint8_t*) (base + byte);
 }
 
 static uint8_t
@@ -795,7 +795,7 @@ copy_space_contains_edge(struct copy_space *space, struct gc_edge edge) {
 static int
 copy_space_remember_edge(struct copy_space *space, struct gc_edge edge) {
   GC_ASSERT(copy_space_contains_edge(space, edge));
-  uint8_t* loc = copy_space_field_logged_byte(edge);
+  _Atomic uint8_t* loc = copy_space_field_logged_byte(edge);
   uint8_t bit = copy_space_field_logged_bit(edge);
   uint8_t byte = atomic_load_explicit(loc, memory_order_acquire);
   do {
@@ -809,7 +809,7 @@ copy_space_remember_edge(struct copy_space *space, struct gc_edge edge) {
 static int
 copy_space_forget_edge(struct copy_space *space, struct gc_edge edge) {
   GC_ASSERT(copy_space_contains_edge(space, edge));
-  uint8_t* loc = copy_space_field_logged_byte(edge);
+  _Atomic uint8_t* loc = copy_space_field_logged_byte(edge);
   uint8_t bit = copy_space_field_logged_bit(edge);
   uint8_t byte = atomic_load_explicit(loc, memory_order_acquire);
   do {

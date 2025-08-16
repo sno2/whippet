@@ -20,7 +20,7 @@
 struct shared_worklist_buf {
   unsigned log_size;
   size_t size;
-  uintptr_t *data;
+  _Atomic uintptr_t *data;
 };
 
 // Min size: 8 kB on 64-bit systems, 4 kB on 32-bit.

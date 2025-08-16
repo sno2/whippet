@@ -37,18 +37,18 @@ struct gc_heap {
   struct large_object_space large_object_space;
   struct gc_extern_space *extern_space;
   struct gc_field_set remembered_set;
-  size_t large_object_pages;
+  _Atomic size_t large_object_pages;
   pthread_mutex_t lock;
   pthread_cond_t collector_cond;
   pthread_cond_t mutator_cond;
   size_t size;
   size_t total_allocated_bytes_at_last_gc;
   size_t size_at_last_gc;
-  int collecting;
-  int check_pending_ephemerons;
+  _Atomic int collecting;
+  _Atomic int check_pending_ephemerons;
   struct gc_pending_ephemerons *pending_ephemerons;
   struct gc_finalizer_state *finalizer_state;
-  enum gc_collection_kind gc_kind;
+  _Atomic enum gc_collection_kind gc_kind;
   size_t mutator_count;
   size_t paused_mutator_count;
   size_t inactive_mutator_count;
@@ -1013,7 +1013,7 @@ gc_heap_contains(struct gc_heap *heap, struct gc_ref ref) {
     || large_object_space_contains(heap_large_object_space(heap), ref);
 }
 
-int*
+_Atomic int*
 gc_safepoint_flag_loc(struct gc_mutator *mut) {
   return &mutator_heap(mut)->collecting;
 }

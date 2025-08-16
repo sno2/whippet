@@ -15,9 +15,9 @@ broadcast_byte(uint8_t byte) {
 }
 
 static inline uint64_t
-load_eight_aligned_bytes(uint8_t *ptr) {
+load_eight_aligned_bytes(_Atomic uint8_t *ptr) {
   GC_ASSERT(((uintptr_t)ptr & 7) == 0);
-  uint8_t * __attribute__((aligned(8))) aligned_ptr = ptr;
+  _Atomic uint8_t * __attribute__((aligned(8))) aligned_ptr = ptr;
   uint64_t word;
   memcpy(&word, aligned_ptr, 8);
 #ifdef WORDS_BIGENDIAN
@@ -27,12 +27,12 @@ load_eight_aligned_bytes(uint8_t *ptr) {
 }
 
 static inline void
-store_eight_aligned_bytes(uint8_t *ptr, uint64_t word) {
+store_eight_aligned_bytes(_Atomic uint8_t *ptr, uint64_t word) {
   GC_ASSERT(((uintptr_t)ptr & 7) == 0);
 #ifdef WORDS_BIGENDIAN
   word = __builtin_bswap64(word);
 #endif
-  uint8_t * __attribute__((aligned(8))) aligned_ptr = ptr;
+  _Atomic uint8_t * __attribute__((aligned(8))) aligned_ptr = ptr;
   memcpy(aligned_ptr, &word, 8);
 }
 
@@ -42,7 +42,7 @@ match_bytes_against_bits(uint64_t bytes, uint8_t mask) {
 }
 
 static inline size_t
-scan_for_byte_with_bits(uint8_t *ptr, size_t limit, uint8_t mask) {
+scan_for_byte_with_bits(_Atomic uint8_t *ptr, size_t limit, uint8_t mask) {
   size_t n = 0;
   size_t unaligned = ((uintptr_t) ptr) & 7;
   if (unaligned) {
@@ -63,8 +63,8 @@ scan_for_byte_with_bits(uint8_t *ptr, size_t limit, uint8_t mask) {
   return limit;
 }
 
-static inline uint8_t*
-scan_backwards_for_byte_with_bits(uint8_t *ptr, uint8_t *base, uint8_t mask) {
+static inline _Atomic uint8_t*
+scan_backwards_for_byte_with_bits(_Atomic uint8_t *ptr, _Atomic uint8_t *base, uint8_t mask) {
   GC_ASSERT_EQ (((uintptr_t)base) & 7, 0);
 
   size_t unaligned = ((uintptr_t) ptr) & 7;
@@ -109,7 +109,7 @@ match_bytes_against_tag(uint64_t bytes, uint8_t mask, uint8_t tag) {
 }
 
 static inline size_t
-scan_for_byte_with_tag(uint8_t *ptr, size_t limit, uint8_t mask, uint8_t tag) {
+scan_for_byte_with_tag(_Atomic uint8_t *ptr, size_t limit, uint8_t mask, uint8_t tag) {
   // The way we handle unaligned reads by padding high bytes with zeroes assumes
   // that all-zeroes is not a matching byte.
   GC_ASSERT(tag);
@@ -160,7 +160,7 @@ match_bytes_against_2_tags(uint64_t bytes, uint8_t mask, uint8_t tag1,
 }
 
 static inline size_t
-scan_for_byte_with_tags(uint8_t *ptr, size_t limit, uint8_t mask,
+scan_for_byte_with_tags(_Atomic uint8_t *ptr, size_t limit, uint8_t mask,
                         uint8_t tag1, uint8_t tag2) {
   // The way we handle unaligned reads by padding high bytes with zeroes assumes
   // that all-zeroes is not a matching byte.

@@ -85,7 +85,7 @@ static void* call_with_gc(void* (*f)(struct thread *),
 #define CHECK_NULL(x) CHECK_EQ(x, NULL)
 #define CHECK_NOT_NULL(x) CHECK_NE(x, NULL)
 
-static size_t ephemeron_chain_length(struct gc_ephemeron **loc,
+static size_t ephemeron_chain_length(_Atomic (struct gc_ephemeron *)*loc,
                                      SmallObject *key) {
   struct gc_ephemeron *head = gc_ephemeron_chain_head(loc);
   size_t len = 0;

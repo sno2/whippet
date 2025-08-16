@@ -53,7 +53,7 @@ struct gc_tracer {
   struct gc_heap *heap;
   atomic_size_t active_tracers;
   size_t worker_count;
-  long epoch;
+  _Atomic long epoch;
   pthread_mutex_t lock;
   pthread_cond_t cond;
   int trace_roots_only;

@@ -4,7 +4,7 @@
 #include "gc-config.h"
 #include "simple-roots-types.h"
 
-#define HANDLE_TO(T) union { T* v; struct handle handle; }
+#define HANDLE_TO(T) union { _Atomic (T*) v; struct handle handle; }
 #define HANDLE_LOC(h) &(h).v
 #define HANDLE_REF(h) (h).v
 #define HANDLE_SET(h,val) do { (h).v = val; } while (0)

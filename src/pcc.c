@@ -40,13 +40,13 @@ struct gc_heap {
 #if GC_GENERATIONAL
   struct gc_field_set remembered_set;
 #endif
-  size_t large_object_pages;
+  _Atomic size_t large_object_pages;
   pthread_mutex_t lock;
   pthread_cond_t collector_cond;
   pthread_cond_t mutator_cond;
   size_t size;
   size_t total_allocated_bytes_at_last_gc;
-  int collecting;
+  _Atomic int collecting;
 #if GC_GENERATIONAL
   int is_minor_collection;
   size_t per_processor_nursery_size;
@@ -54,7 +54,7 @@ struct gc_heap {
 #endif
   size_t processor_count;
   size_t max_active_mutator_count;
-  int check_pending_ephemerons;
+  _Atomic int check_pending_ephemerons;
 #if GC_GENERATIONAL
   struct gc_pending_ephemerons *nursery_pending_ephemerons;
 #endif
@@ -1077,7 +1077,7 @@ void gc_write_barrier_slow(struct gc_mutator *mut, struct gc_ref obj,
     gc_field_set_writer_add_edge(mutator_field_logger(mut), edge);
 }
 
-int* gc_safepoint_flag_loc(struct gc_mutator *mut) {
+_Atomic int* gc_safepoint_flag_loc(struct gc_mutator *mut) {
   return &mutator_heap(mut)->collecting;
 }
 

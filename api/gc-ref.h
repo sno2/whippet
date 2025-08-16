@@ -7,7 +7,7 @@
 #include <stdint.h>
 
 struct gc_ref {
-  uintptr_t value;
+  _Atomic uintptr_t value;
 };
 
 static inline struct gc_ref gc_ref(uintptr_t value) {

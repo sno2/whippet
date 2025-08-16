@@ -21,7 +21,7 @@ struct nofl_hole_with_size {
 };
 
 struct nofl_holeset {
-  uint64_t nonempty;
+  _Atomic uint64_t nonempty;
   struct nofl_hole *buckets[64];
 };
 
